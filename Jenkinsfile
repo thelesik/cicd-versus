@@ -40,20 +40,20 @@ pipeline {
 
                 stage('Docker login ') {
                     steps {
-                        sh login.sh
+                        sh 'login.sh'
                     }
                 }
                 stage('Deploy backend') {
                     steps {
                       dir('backend') {
-                        sh back.sh
+                        sh 'back.sh'
                       }
                     }
                 }
                 stage('Deploy frontend') {
                     steps {
                         dir('frontend') {
-                          sh front.sh
+                          sh 'front.sh'
                         }
                     }
                 }
