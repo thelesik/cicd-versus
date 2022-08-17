@@ -45,16 +45,16 @@ pipeline {
                 }
                 stage('Deploy backend') {
                     steps {
-                      dir('backend') {
+                     // dir('backend') {
                         sh 'back.sh'
-                      }
+                      //}
                     }
                 }
                 stage('Deploy frontend') {
                     steps {
-                        dir('frontend') {
+                        //dir('frontend') {
                           sh 'front.sh'
-                        }
+                        
                     }
                 }
             }
