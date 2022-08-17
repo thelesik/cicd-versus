@@ -1,68 +1,63 @@
 pipeline {
-    agent any
-    environment {
-        GOOGLE_PROJECT_ID = 'vs-kg-infra';
-        GOOGLE_SERVICE_ACCOUNT_KEY = credentials('vs-kg-infra-service-account-key');
+  agent {
+    kubernetes {
+      defaultContainer 'jenkins-slave'
+      yamlFile 'jenkins-slave.yaml'
     }
-    stages {
-        stage('Clone repository') {
-            steps {
-                checkout scm
+  }
+  environment {
+    // MYSQL_USER     = credentials('MYSQL_USER')
+    // MYSQL_PASSWORD = credentials('MYSQL_PASSWORD')
+    MYSQL_USER     = 'admin'
+    MYSQL_PASSWORD = 'password'
+  }
+  stages {
+    stage ('Enviromnet') {
+      steps {
+        script {
+          if (env.GIT_BRANCH == 'dev') {
+            stage ('Stage: dev') {
+                env.STAGE = 'dev'
+                sh 'echo ${STAGE}'
             }
-        }
-        stage('Build container') {
-            steps{
-                sh 'docker-compose build'
+          } else if (env.GIT_BRANCH == 'prod') {
+            stage ('Stage: prod') {
+                env.STAGE = 'prod'
+                sh 'echo ${STAGE}'
+            } 
+          } else {
+            stage ('Stage: main') {
+                env.STAGE = 'main'
+                sh 'echo ${STAGE}'
             }
+          }            
         }
-        stage('Run containers') {
-            steps {
-                sh 'docker-compose up -d'
-                sleep 10
-                sh 'docker-compose restart'
+      }
+    }
 
-                sh 'docker-compose exec -T backend python manage.py migrate'
-                sh 'docker-compose exec -T backend python manage.py loaddata data.json'
-            }
-        }
-        stage('Run tests') {
+    stage('Deployment') {
             parallel {
-                stage('backend unit test') {
+
+                stage('Docker login ') {
                     steps {
-                        sh 'docker-compose exec -T backend python manage.py test'
+                        sh login.sh
                     }
                 }
-                stage('frontend unit tests') {
+                stage('Deploy backend') {
+                    steps {
+                      dir('backend') {
+                        sh back.sh
+                      }
+                    }
+                }
+                stage('Deploy frontend') {
                     steps {
                         dir('frontend') {
-                            sh 'yarn'
-                            sh 'yarn test --watchAll=false --coverage --silent'
+                          sh front.sh
                         }
                     }
                 }
             }
         }
-        stage('Deploy') {
-            steps {
-                withCredentials([file(credentialsId: 'vskg-dotenv-prod', variable: 'DOTENV')]) {
-                    sh 'cat ${DOTENV} > ./backend/.env'
-                }
-                sh 'gcloud config set project ${GOOGLE_PROJECT_ID};'
-                sh 'gcloud auth activate-service-account --key-file ${GOOGLE_SERVICE_ACCOUNT_KEY};'
-                dir('backend') {
-                    sh 'gcloud app deploy'
-                }
-                dir('frontend') {
-                    sh 'gcloud builds submit --tag gcr.io/${GOOGLE_PROJECT_ID}/cra-cloud-run'
-                    sh 'gcloud beta run deploy versus-kg --image gcr.io/vs-kg-infra/cra-cloud-run --platform managed --region us-central1'
-                }
-            }
-        }
-    }
-   post {
-      always {
-         sh "docker-compose down || true"
-         sh "docker system prune -a --volumes -f"
-      }
-   }
+  }
 }
